@@ -1,0 +1,78 @@
+# ============ AI 协作工作区（私有，不开源） ============
+/.workbuddy/
+/_shared/
+/PM/
+/BE/
+/FE/
+/UI/
+/OPS/
+/FDE/
+/QA/
+
+# ============ Python ============
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyd
+.Python
+.venv/
+.venv*/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+
+# ============ QuickDrop 运行时产物（含真实访问口令，绝不入库） ============
+quickdrop/config.json
+quickdrop/qrcode.png
+quickdrop/received/
+quickdrop/shared/*
+!quickdrop/shared/.gitkeep
+quickdrop/logs/
+
+# ============ 打包产物 ============
+quickdrop/build/
+quickdrop/dist/
+build_old*/
+dist_testrun*/
+
+# ============ 编辑器 / IDE ============
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# ============ Windows 系统垃圾 ============
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+desktop.ini
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+~$*
+*.tmp
+*.bak
+*.old
+*.orig
+
+# ============ macOS / Linux ============
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+.fseventsd
+
+# ============================================================
+#  以下是交付物，勿加入忽略：
+#  quickdrop/QuickDrop.spec   PyInstaller 配置
+#  quickdrop/build.bat        打包脚本
+#  quickdrop/run.bat          开发启动脚本
+#  quickdrop/static/icon-192.png
+#  quickdrop/static/icon-512.png
+# ============================================================

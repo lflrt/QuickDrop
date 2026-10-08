@@ -1,0 +1,21 @@
+# Python
+.venv/
+.venv_stale313/
+__pycache__/
+*.pyc
+
+# 运行时产物（不进仓库）
+config.json          # 首次运行生成；含真实 token，不入库
+qrcode.png
+received/
+shared/*
+!shared/.gitkeep
+logs/
+
+# 打包产物
+build/
+dist/
+build_old*/
+dist_testrun*/
+
+# 注意：QuickDrop.spec 与 build.bat 是**交付物**，必须入库，勿加入忽略。

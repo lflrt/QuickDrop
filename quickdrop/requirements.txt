@@ -1,0 +1,12 @@
+# QuickDrop / 快传 运行与打包依赖
+# 每条依赖都带兼容上界，避免仅下界导致某次升级引入破坏性变更或含CVE 的新版本
+# 可复现基线见 requirements.lock。
+Flask>=3.0,<4
+Werkzeug>=3.0,<4
+waitress>=3.0,<4
+qrcode>=7.4.2,<9
+Pillow>=10.0.0,<13
+tkinterdnd2>=0.4.0,<1
+plyer>=2.1.0,<3
+zeroconf>=0.130.0,<1
+pyinstaller>=6.0.0,<7

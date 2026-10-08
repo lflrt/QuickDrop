@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#4a90d9" />
+  <title>QuickDrop 快传</title>
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="icon" href="/static/icon-192.png" />
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header class="app-header">
+    <h1>QuickDrop 快传</h1>
+    <p id="conn" class="muted">连接状态：检测中…</p>
+  </header>
+
+  <main>
+    <section class="card">
+      <h2>上传到电脑</h2>
+      <input id="fileInput" type="file" multiple />
+      <button id="uploadBtn" class="primary">上传到电脑</button>
+      <progress id="progress" value="0" max="100" hidden></progress>
+      <p id="uploadMsg" class="msg"></p>
+    </section>
+
+    <section class="card">
+      <h2>电脑共享的文件 <button id="refreshBtn" class="ghost small">刷新</button></h2>
+      <ul id="fileList" class="files"></ul>
+    </section>
+
+    <section class="card">
+      <h2>文本快传</h2>
+      <textarea id="clipText" rows="3" placeholder="输入文本，发送到电脑剪贴板"></textarea>
+      <div class="row">
+        <button id="clipSend" class="primary">发送到电脑</button>
+        <button id="clipGet" class="ghost">读取电脑剪贴板</button>
+      </div>
+      <p id="clipMsg" class="msg"></p>
+    </section>
+  </main>
+
+  <footer>
+    <p class="muted">同一 WiFi 下直传，不经过云端。</p>
+  </footer>
+
+  <script src="/static/app.js"></script>
+  <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", function () {
+        navigator.serviceWorker.register("/sw.js").catch(function () {});
+      });
+    }
+  </script>
+</body>
+</html>
