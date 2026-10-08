@@ -37,6 +37,8 @@ quickdrop/build/
 quickdrop/dist/
 build_old*/
 dist_testrun*/
+build_new*/
+dist_new*/
 
 # ============ 编辑器 / IDE ============
 .idea/
