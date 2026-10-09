@@ -175,11 +175,37 @@ curl --noproxy "*" -I http://127.0.0.1:8765/api/health
 
 ---
 
+## 许可与授权（贡献者必读）
+
+本项目采用**双许可证**结构，完整声明见 [`LICENSE`](LICENSE)：
+
+| 用途 | 需要什么 |
+|---|---|
+| 个人自用、学习研究、非商业使用 | 无需授权（MIT） |
+| 向本仓库提交 PR / 贡献代码 | 无需授权（MIT） |
+| **任何商业用途** | **须事先取得版权所有人书面许可** |
+
+**「商业用途」包括但不限于**：企业/公司内部用于生产经营、嵌入或集成进商业产品、
+OEM / 白标交付给第三方客户、部署为对外收费服务（SaaS）、二次分发并从中收取任何费用。
+
+授权申请邮箱：`1078511170@qq.com`，条款详见 [`COMMERCIAL-LICENSE.md`](COMMERCIAL-LICENSE.md)。
+
+> ⚠️ **贡献者须知**：向本仓库提交 PR，即表示你确认你的贡献以 **MIT 许可**授权给本项目，
+> 且你有权如此授权。若你的贡献受更严格的许可约束，或你所在组织对开源贡献有政策要求，
+> **请在提交前先说明** —— 涉及授权变更的部分可能无法合并。
+
+**商标与名称**：本软件著作权、商标、名称、Logo 均归版权所有人所有。
+MIT 授权不包含商标使用许可，**不得**在衍生作品中继续使用 QuickDrop 的名称或 Logo
+（明确标示"基于 QuickDrop 修改"的说明性引用除外）。
+
+---
+
 ## 需要帮助时
 
 - 架构疑问 → 读 [`docs/architecture.md`](docs/architecture.md)
 - 怎么用 → 读 [`docs/usage.md`](docs/usage.md)
 - 安全相关 → 读 [`docs/security-design.md`](docs/security-design.md) 与 [`SECURITY.md`](SECURITY.md)
+- **商业使用 / 授权** → 读 [`COMMERCIAL-LICENSE.md`](COMMERCIAL-LICENSE.md) 或邮件 `1078511170@qq.com`
 - 卡住太久 → 搜搜有没有已存在的 Issue，没有就开一个问，别硬啃
 
 ---
