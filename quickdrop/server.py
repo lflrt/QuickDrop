@@ -466,7 +466,13 @@ def create_app(cfg: dict | None = None) -> Flask:
                     "req=%s 系统剪贴板写入失败（文本已记录，可在主窗口点「复制」）", _rid()
                 )
             return jsonify({"ok": True, "length": len(text), "clipped": clipped})
-        return jsonify({"text": clipboard["text"]})
+        # GET：返回**系统剪贴板真实内容**，供手机端「读取电脑剪贴板」使用。
+        # 读不到（剪贴板被占用 / 里面没有文本）时回落到服务端存储值，
+        # 保证「发什么就能读回什么」的往返语义不破。
+        sys_text = U.get_clipboard()
+        if sys_text is not None:
+            return jsonify({"text": sys_text, "source": "system"})
+        return jsonify({"text": clipboard["text"], "source": "store"})
 
     @app.get("/api/qr")
     def api_qr():

@@ -390,6 +390,85 @@ def _set_clipboard_posix(text: str) -> bool:
     return False
 
 
+def get_clipboard() -> str | None:
+    """读系统剪贴板文本；读不到（非文本剪贴板 / 被占用 / 非支持平台）返回 None。
+
+    与 set_clipboard 对称，同样**不使用 Tkinter**（非线程安全 + update() 会阻塞）。
+    """
+    try:
+        if sys.platform.startswith("win"):
+            return _get_clipboard_win32()
+        return _get_clipboard_posix()
+    except Exception:
+        return None
+
+
+def _get_clipboard_win32() -> str | None:
+    """Win32：读 CF_UNICODETEXT。剪贴板可能被占用，重试几次。"""
+    import ctypes
+    from ctypes import wintypes
+
+    user32 = ctypes.WinDLL("user32", use_last_error=True)
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+
+    user32.OpenClipboard.argtypes = [wintypes.HWND]
+    user32.OpenClipboard.restype = wintypes.BOOL
+    user32.GetClipboardData.argtypes = [wintypes.UINT]
+    user32.GetClipboardData.restype = wintypes.HANDLE
+    user32.IsClipboardFormatAvailable.argtypes = [wintypes.UINT]
+    user32.IsClipboardFormatAvailable.restype = wintypes.BOOL
+    user32.CloseClipboard.restype = wintypes.BOOL
+    kernel32.GlobalLock.argtypes = [wintypes.HGLOBAL]
+    kernel32.GlobalLock.restype = ctypes.c_void_p
+    kernel32.GlobalUnlock.argtypes = [wintypes.HGLOBAL]
+    kernel32.GlobalUnlock.restype = wintypes.BOOL
+
+    CF_UNICODETEXT = 13
+
+    for _ in range(10):
+        if not user32.OpenClipboard(None):
+            time.sleep(0.05)
+            continue
+        try:
+            if not user32.IsClipboardFormatAvailable(CF_UNICODETEXT):
+                return None  # 剪贴板里没有文本（如刚复制了文件）
+            handle = user32.GetClipboardData(CF_UNICODETEXT)
+            if not handle:
+                return None
+            ptr = kernel32.GlobalLock(handle)
+            if not ptr:
+                return None
+            try:
+                return ctypes.wstring_at(ptr)
+            finally:
+                kernel32.GlobalUnlock(handle)
+        finally:
+            user32.CloseClipboard()
+    return None
+
+
+def _get_clipboard_posix() -> str | None:
+    """macOS 用 pbpaste；Linux 用 xclip / xsel 读取。"""
+    if sys.platform == "darwin":
+        cmds = [["pbpaste"]]
+    else:
+        cmds = [
+            ["xclip", "-selection", "clipboard", "-o"],
+            ["xsel", "--clipboard", "--output"],
+        ]
+    for cmd in cmds:
+        try:
+            p = subprocess.run(
+                cmd, check=False, timeout=10,
+                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            )
+            if p.returncode == 0:
+                return p.stdout.decode("utf-8", errors="replace")
+        except Exception:
+            continue
+    return None
+
+
 def set_clipboard(text: str) -> bool:
     """写系统剪贴板，尽力而为；失败返回 False，不抛异常。
 

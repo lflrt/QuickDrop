@@ -1,13 +1,17 @@
 """QuickDrop / 快传 —— Tkinter 主窗口
 
-主窗口：二维码 + 访问地址 + 共享列表(拖拽区) + 接收目录 + 状态栏。
+主窗口：二维码 + 访问地址 + 文本快传(可编辑) + 共享列表(拖拽区) + 接收目录 + 状态栏。
 拖拽：tkinterdnd2，把桌面文件拖进窗口即共享，不需要复制进 shared/。
 关闭：关闭窗口 = on_close() 停服务 + 退出程序（不做托盘、不做开机自启）。
 
 视觉规范（与手机端 static/style.css 同源，保证两端观感一致）：
 - 品牌蓝 #4a90d9 ｜ 页面底 #f5f7fa ｜ 卡片白 #ffffff ｜ 主文字 #1f2733 ｜ 次要 #7a8699 ｜ 危险 #d9534f
-- 层级：品牌标题栏 → 连接信息卡（二维码 + 地址）→ 共享文件卡（主操作区）→ 底部状态栏
+- 层级：品牌标题栏 → 连接信息卡（二维码 + 地址）→ 文本快传卡 → 共享文件卡（主操作区）→ 底部状态栏
 - 边框：Tkinter 无原生圆角，用 1px 描边卡片（highlightthickness）模拟"卡片浮起"层次
+
+「文本快传」卡片说明：文本框**可编辑**，手机发来的内容只是预填，用户可自由修改；
+不再提供「复制到剪贴板」按钮——系统剪贴板在写入成功时已含该文本，Ctrl+V 即可，
+按钮属冗余。剪贴板被占用导致写入失败时，手机端会给出提示。
 
 ⚠️ 需要真实桌面（有显示）才能运行；无头环境会抛 TclError，由 server.main() 回落处理。
 """
@@ -84,15 +88,15 @@ def build_clip_card(parent, font, clipboard_state):
     body = tk.Frame(inner, bg=CARD)
     body.pack(fill="x", pady=(8, 0))
 
+    # 可编辑：用户可直接在此修改/整理文本（手机发来的内容只是预填）
     text_box = tk.Text(
         body, height=3, wrap="word", bg="#fbfcfe", fg=MUTED, bd=0,
         highlightthickness=1, highlightbackground=BORDER,
         font=font(10), padx=8, pady=6,
     )
-    text_box.pack(side="left", fill="both", expand=True)
+    text_box.pack(fill="both", expand=True)
 
     def render(text, hint):
-        text_box.configure(state="normal")
         text_box.delete("1.0", tk.END)
         if text:
             text_box.insert("1.0", text)
@@ -100,32 +104,7 @@ def build_clip_card(parent, font, clipboard_state):
         else:
             text_box.insert("1.0", "（暂无内容）")
             text_box.configure(fg=MUTED)
-        text_box.configure(state="disabled")
         hint_var.set(hint)
-
-    def copy():
-        """把当前收到的文本再写一次系统剪贴板（剪贴板被占用时的补救手段）。"""
-        try:
-            text = str((clipboard_state or {}).get("text") or "")
-        except Exception:
-            text = ""
-        if not text:
-            hint_var.set("暂无可复制的内容")
-            return
-        try:
-            import utils as U
-
-            if U.set_clipboard(text):
-                hint_var.set("已复制到剪贴板，可直接 Ctrl+V ✅")
-            else:
-                hint_var.set("复制失败：剪贴板被其他程序占用，请稍后重试")
-        except Exception as e:
-            hint_var.set(f"复制失败：{e}")
-
-    btns = tk.Frame(body, bg=CARD)
-    btns.pack(side="right", fill="y", padx=(10, 0))
-    copy_btn = ttk.Button(btns, text="复制到剪贴板", style="Brand.TButton", command=copy)
-    copy_btn.pack()
 
     seen = {"version": -1}
 

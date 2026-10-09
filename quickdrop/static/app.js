@@ -99,7 +99,7 @@
       .then(function (r) { return r.json().catch(function () { return {}; }); })
       .then(function (d) {
         if (d && d.clipped === false) {
-          setMsg($("clipMsg"), "已发送，但电脑剪贴板被其他程序占用；电脑窗口已显示内容，可在窗口点「复制到剪贴板」", true);
+          setMsg($("clipMsg"), "已发送，但电脑剪贴板被其他程序占用，未能自动写入；可在电脑窗口的「文本快传」卡片中查看内容并手动复制", true);
         } else {
           setMsg($("clipMsg"), "已发送到电脑 ✅ 可直接 Ctrl+V", false);
         }
@@ -110,7 +110,15 @@
   function getClip() {
     request("/api/clipboard")
       .then(function (r) { return r.json(); })
-      .then(function (d) { $("clipText").value = d.text || ""; setMsg($("clipMsg"), "已读取电脑剪贴板", false); })
+      .then(function (d) {
+        var text = d.text || "";
+        $("clipText").value = text;
+        if (d.source === "system") {
+          setMsg($("clipMsg"), text ? "已读取电脑剪贴板内容" : "电脑剪贴板当前为空（或内容不是文本）", !text);
+        } else {
+          setMsg($("clipMsg"), text ? "剪贴板读取受限，已显示上次发送的内容" : "电脑剪贴板当前为空", !text);
+        }
+      })
       .catch(function (e) { setMsg($("clipMsg"), e.message, true); });
   }
 
