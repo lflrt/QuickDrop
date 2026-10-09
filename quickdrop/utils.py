@@ -24,6 +24,7 @@ import socket
 import string
 import subprocess
 import sys
+import time
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
@@ -284,30 +285,123 @@ def has_free_space(directory: str, needed_bytes: int, margin: float = 0.1) -> bo
     return free >= needed_bytes * (1.0 + margin)
 
 
-def set_clipboard(text: str) -> bool:
-    """写系统剪贴板，尽力而为；失败返回 False，不抛异常。"""
-    try:
-        import tkinter  # 3.12 运行时含 tkinter
+def _set_clipboard_win32(text: str) -> bool:
+    """Windows：用 Win32 API 直接写 Unicode 剪贴板（CF_UNICODETEXT）。
 
-        r = tkinter.Tk()
-        r.withdraw()
-        r.clipboard_clear()
-        r.clipboard_append(text)
-        r.update()
-        r.destroy()
-        return True
+    为什么不走 tkinter：
+    ① Tk 不是线程安全的——本函数由 waitress 工作线程调用，创建 Tk 实例有风险；
+    ② Tk 在 Windows 采用「延迟渲染」交付剪贴板，`clipboard_append()` 之后一旦
+       销毁窗口，数据所有权随之释放，内容立即失效（表现为 Ctrl+V 粘贴不出东西）。
+    Win32 直写没有这两个问题：无窗口生命周期、无线程约束、原生 Unicode。
+    """
+    import ctypes
+    from ctypes import wintypes
+
+    user32 = ctypes.WinDLL("user32", use_last_error=True)
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+
+    # 显式声明签名，否则 64 位下句柄会被截断成 32 位
+    user32.OpenClipboard.argtypes = [wintypes.HWND]
+    user32.OpenClipboard.restype = wintypes.BOOL
+    user32.EmptyClipboard.restype = wintypes.BOOL
+    user32.CloseClipboard.restype = wintypes.BOOL
+    user32.SetClipboardData.argtypes = [wintypes.UINT, wintypes.HANDLE]
+    user32.SetClipboardData.restype = wintypes.HANDLE
+    kernel32.GlobalAlloc.argtypes = [wintypes.UINT, ctypes.c_size_t]
+    kernel32.GlobalAlloc.restype = wintypes.HGLOBAL
+    kernel32.GlobalLock.argtypes = [wintypes.HGLOBAL]
+    kernel32.GlobalLock.restype = ctypes.c_void_p
+    kernel32.GlobalUnlock.argtypes = [wintypes.HGLOBAL]
+    kernel32.GlobalUnlock.restype = wintypes.BOOL
+    kernel32.GlobalFree.argtypes = [wintypes.HGLOBAL]
+
+    GMEM_MOVEABLE = 0x0002
+    CF_UNICODETEXT = 13
+
+    data = (text + "\x00").encode("utf-16-le")
+    handle = kernel32.GlobalAlloc(GMEM_MOVEABLE, len(data))
+    if not handle:
+        return False
+    ptr = kernel32.GlobalLock(handle)
+    if not ptr:
+        kernel32.GlobalFree(handle)
+        return False
+    try:
+        ctypes.memmove(ptr, data, len(data))
+    finally:
+        kernel32.GlobalUnlock(handle)
+
+    # 剪贴板同一时刻只能被一个进程打开，短暂冲突时重试
+    opened = False
+    for _ in range(10):
+        if user32.OpenClipboard(None):
+            opened = True
+            break
+        time.sleep(0.05)
+    if not opened:
+        kernel32.GlobalFree(handle)
+        return False
+    try:
+        user32.EmptyClipboard()
+        if not user32.SetClipboardData(CF_UNICODETEXT, handle):
+            kernel32.GlobalFree(handle)  # 失败时才由我们释放
+            return False
+        return True  # 成功：所有权已移交系统，不可再 free
+    finally:
+        user32.CloseClipboard()
+
+
+def _set_clipboard_win32_fallback(text: str) -> bool:
+    """Win32 直写失败时的兜底：调用系统 clip.exe。
+
+    clip.exe 按控制台代码页解释 stdin（中文 Windows 为 CP936），
+    因此用 mbcs 编码而非 UTF-16，否则中文会变乱码。
+    """
+    try:
+        data = text.encode("mbcs", errors="replace")
     except Exception:
-        pass
+        return False
+    try:
+        p = subprocess.run(["clip"], input=data, check=False, timeout=10)
+        return p.returncode == 0
+    except Exception:
+        return False
+
+
+def _set_clipboard_posix(text: str) -> bool:
+    """macOS 用 pbcopy；Linux 用 xclip / xsel（需系统已安装其一）。"""
+    if sys.platform == "darwin":
+        cmds = [["pbcopy"]]
+    else:
+        cmds = [
+            ["xclip", "-selection", "clipboard"],
+            ["xsel", "--clipboard", "--input"],
+        ]
+    for cmd in cmds:
+        try:
+            p = subprocess.run(
+                cmd, input=text.encode("utf-8"), check=False, timeout=10,
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            )
+            if p.returncode == 0:
+                return True
+        except Exception:
+            continue
+    return False
+
+
+def set_clipboard(text: str) -> bool:
+    """写系统剪贴板，尽力而为；失败返回 False，不抛异常。
+
+    ⚠️ 本函数会被 waitress 工作线程调用，因此**不得**使用 Tkinter
+    （非线程安全，且 `update()` 在无交互桌面的进程里会阻塞）。
+    """
     try:
         if sys.platform.startswith("win"):
-            subprocess.run(["clip"], input=text.encode("utf-16le"), check=False)
-        elif sys.platform == "darwin":
-            subprocess.run(["pbcopy"], input=text.encode("utf-8"), check=False)
-        else:
-            subprocess.run(
-                ["xclip", "-selection", "clipboard"], input=text.encode("utf-8"), check=False
-            )
-        return True
+            if _set_clipboard_win32(text):
+                return True
+            return _set_clipboard_win32_fallback(text)
+        return _set_clipboard_posix(text)
     except Exception:
         return False
 

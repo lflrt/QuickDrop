@@ -58,12 +58,110 @@ def _make_root():
     return TkinterDnD.Tk() if _HAS_DND else tk.Tk()
 
 
-def build_window(url, qr_path, shared, received_dir, cfg, on_close=None):
-    """构建并运行主窗口（阻塞在 mainloop）。on_close 为关闭时回调（停服务）。"""
+def build_clip_card(parent, font, clipboard_state):
+    """构建「文本快传」卡片，返回 (card, refresh)。
+
+    refresh() 检查 clipboard_state['version'] 是否变化，变了就刷新界面，返回是否刷新过。
+    **刻意把「渲染」与「调度」分开**：调用方决定多久调一次 refresh（主窗口用
+    root.after），测试则可直接调用而不需要 Tk mainloop。
+
+    clipboard_state 由服务端在 waitress 线程里写入；这里只在 Tk 主线程读，
+    避免跨线程操作 UI。
+    """
+    card = tk.Frame(parent, bg=CARD, highlightbackground=BORDER, highlightthickness=1)
+
+    inner = tk.Frame(card, bg=CARD)
+    inner.pack(fill="x", padx=16, pady=12)
+
+    head = tk.Frame(inner, bg=CARD)
+    head.pack(fill="x")
+
+    tk.Label(head, text="文本快传", bg=CARD, fg=TEXT, font=font(11, "bold")).pack(side="left")
+
+    hint_var = tk.StringVar(value="等待手机发送…")
+    tk.Label(head, textvariable=hint_var, bg=CARD, fg=MUTED, font=font(9)).pack(side="right")
+
+    body = tk.Frame(inner, bg=CARD)
+    body.pack(fill="x", pady=(8, 0))
+
+    text_box = tk.Text(
+        body, height=3, wrap="word", bg="#fbfcfe", fg=MUTED, bd=0,
+        highlightthickness=1, highlightbackground=BORDER,
+        font=font(10), padx=8, pady=6,
+    )
+    text_box.pack(side="left", fill="both", expand=True)
+
+    def render(text, hint):
+        text_box.configure(state="normal")
+        text_box.delete("1.0", tk.END)
+        if text:
+            text_box.insert("1.0", text)
+            text_box.configure(fg=TEXT)
+        else:
+            text_box.insert("1.0", "（暂无内容）")
+            text_box.configure(fg=MUTED)
+        text_box.configure(state="disabled")
+        hint_var.set(hint)
+
+    def copy():
+        """把当前收到的文本再写一次系统剪贴板（剪贴板被占用时的补救手段）。"""
+        try:
+            text = str((clipboard_state or {}).get("text") or "")
+        except Exception:
+            text = ""
+        if not text:
+            hint_var.set("暂无可复制的内容")
+            return
+        try:
+            import utils as U
+
+            if U.set_clipboard(text):
+                hint_var.set("已复制到剪贴板，可直接 Ctrl+V ✅")
+            else:
+                hint_var.set("复制失败：剪贴板被其他程序占用，请稍后重试")
+        except Exception as e:
+            hint_var.set(f"复制失败：{e}")
+
+    btns = tk.Frame(body, bg=CARD)
+    btns.pack(side="right", fill="y", padx=(10, 0))
+    copy_btn = ttk.Button(btns, text="复制到剪贴板", style="Brand.TButton", command=copy)
+    copy_btn.pack()
+
+    seen = {"version": -1}
+
+    def refresh():
+        try:
+            version = int((clipboard_state or {}).get("version", 0))
+        except Exception:
+            version = 0
+        if version == seen["version"]:
+            return False
+        seen["version"] = version
+        try:
+            text = str((clipboard_state or {}).get("text") or "")
+            stamp = str((clipboard_state or {}).get("updated_at") or "")
+        except Exception:
+            text, stamp = "", ""
+        if text:
+            render(text, f"已收到手机文本（{stamp}）")
+        else:
+            render("", "等待手机发送…")
+        return True
+
+    return card, refresh
+
+
+def build_window(url, qr_path, shared, received_dir, cfg, on_close=None, clipboard_state=None):
+    """构建并运行主窗口（阻塞在 mainloop）。on_close 为关闭时回调（停服务）。
+
+    clipboard_state：服务端共享的剪贴板状态字典 {"text","version","updated_at"}。
+    主窗口用 root.after 轮询 version 变化来刷新显示——服务端在 waitress 线程里
+    只写字典，Tkinter 只在主线程读写，避免跨线程操作 UI。
+    """
     root = _make_root()
     root.title("QuickDrop 快传")
-    root.geometry("760x580")
-    root.minsize(700, 520)
+    root.geometry("760x700")
+    root.minsize(700, 620)
     root.configure(bg=BG)
 
     F = _pick_font(root)
@@ -185,6 +283,18 @@ def build_window(url, qr_path, shared, received_dir, cfg, on_close=None):
         bg=BRAND_SOFT, fg="#3f6f9e", font=font(9), justify="left", wraplength=380,
     ).pack(anchor="w", padx=10, pady=8)
 
+    # --- 中：文本快传卡片（显示手机发来的文字） ---
+    clip_card, refresh_clip = build_clip_card(body, font, clipboard_state)
+    clip_card.pack(fill="x", pady=(12, 0))
+
+    def _poll_clip():
+        """轮询服务端 version：只读字典，不跨线程碰 UI。"""
+        try:
+            refresh_clip()
+        except Exception:
+            pass
+        root.after(700, _poll_clip)
+
     # --- 下：共享文件卡片（拖拽主操作区） ---
     files_card = tk.Frame(body, bg=CARD, highlightbackground=BORDER, highlightthickness=1)
     files_card.pack(fill="both", expand=True, pady=(12, 0))
@@ -298,5 +408,7 @@ def build_window(url, qr_path, shared, received_dir, cfg, on_close=None):
     root.protocol("WM_DELETE_WINDOW", on_quit)
 
     refresh_list()
+    refresh_clip()   # 首屏渲染一次
+    _poll_clip()     # 启动轮询（自身用 root.after 续期）
     root.mainloop()
     return root

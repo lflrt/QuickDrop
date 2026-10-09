@@ -96,7 +96,14 @@
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text: $("clipText").value })
     })
-      .then(function () { setMsg($("clipMsg"), "已发送到电脑 ✅", false); })
+      .then(function (r) { return r.json().catch(function () { return {}; }); })
+      .then(function (d) {
+        if (d && d.clipped === false) {
+          setMsg($("clipMsg"), "已发送，但电脑剪贴板被其他程序占用；电脑窗口已显示内容，可在窗口点「复制到剪贴板」", true);
+        } else {
+          setMsg($("clipMsg"), "已发送到电脑 ✅ 可直接 Ctrl+V", false);
+        }
+      })
       .catch(function (e) { setMsg($("clipMsg"), e.message, true); });
   }
 

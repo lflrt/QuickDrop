@@ -255,7 +255,7 @@ def create_app(cfg: dict | None = None) -> Flask:
     for p in cfg.get("shared_files", []):
         shared.add(p)
 
-    clipboard = {"text": ""}
+    clipboard = {"text": "", "version": 0, "updated_at": ""}
 
     # ---------- 日志：request_id + 请求记录 + 异常 ----------
     @app.before_request
@@ -456,8 +456,16 @@ def create_app(cfg: dict | None = None) -> Flask:
                     {"error": "clipboard too large", "code": 413, "request_id": _rid()}
                 ), 413
             clipboard["text"] = text
-            U.set_clipboard(text)
-            return jsonify({"ok": True, "length": len(text)})
+            # version 供电脑端 GUI 轮询判断「是否来了新文本」；写入失败也要递增，
+            # 这样界面仍能显示内容（用户可在窗口里手动点「复制」）。
+            clipboard["version"] = clipboard.get("version", 0) + 1
+            clipboard["updated_at"] = time.strftime("%H:%M:%S")
+            clipped = U.set_clipboard(text)
+            if not clipped:
+                log.warning(
+                    "req=%s 系统剪贴板写入失败（文本已记录，可在主窗口点「复制」）", _rid()
+                )
+            return jsonify({"ok": True, "length": len(text), "clipped": clipped})
         return jsonify({"text": clipboard["text"]})
 
     @app.get("/api/qr")
@@ -498,6 +506,7 @@ def main() -> int:
     ext = app.extensions["quickdrop"]
     shared = ext["shared"]
     received_dir = ext["received_dir"]
+    clipboard_state = ext["clipboard"]
 
     from waitress import create_server
 
@@ -540,7 +549,10 @@ def main() -> int:
             raise RuntimeError("QUICKDROP_HEADLESS=1（开发/无头模式）")
         import gui
 
-        gui.build_window(url, qr_path, shared, received_dir, cfg, on_close=stop)
+        gui.build_window(
+            url, qr_path, shared, received_dir, cfg,
+            on_close=stop, clipboard_state=clipboard_state,
+        )
     except (SystemExit, KeyboardInterrupt):
         raise
     except BaseException as e:  # 无显示环境（无头）→ 回落为纯服务模式
